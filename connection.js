@@ -38,7 +38,10 @@ connection.oniceconnectionstatechange = (event) => {
       // This is the answering party receiving an offer
       await acceptRemoteOffer(offer);
 
-      // TODO: show feedback
+      message.textContent = "Click button to accept connection!";
+      button.textContent = "Accept connection";
+      button.disabled = false;
+      button.onclick = createAnswer;
     }
   } else {
     message.textContent = "Click button to start connection process";
@@ -55,7 +58,7 @@ async function createOffer() {
   offer = await connection.createOffer();
   await connection.setLocalDescription(offer);
 
-  // Create link
+  // Feedback
   const href = window.location.href;
   const base = href.includes("?") ? href.slice(0, href.indexOf("?")) : href;
   const query = "?O=" + encodeURI(JSON.stringify(offer));
@@ -70,6 +73,7 @@ async function applyOffer(offer) {
   channel = connection.createDataChannel("data");
   channel.onmessage = (event) => alert(event.data);
 
+  const newOffer = await connection.createOffer();
   await connection.setLocalDescription(offer);
 }
 
@@ -81,7 +85,11 @@ async function createAnswer() {
   answer = await connection.createAnswer();
   await connection.setLocalDescription(answer);
 
-  // TODO: create link
+  // Feedback
+  const link = window.location.href + "&A=" + encodeURI(JSON.stringify(answer));
+  message.textContent = `Share link back! ${link}`;
+  navigator.clipboard.writeText(link);
+  button.disabled = true;
 }
 
 async function acceptAnswer(answer) {
@@ -89,13 +97,12 @@ async function acceptAnswer(answer) {
 }
 
 function getOfferAndAnswer() {
-  const params = window.location.search.slice(1).split("&");
+  const params = decodeURI(window.location.search).slice(1).split("&");
 
   let offer;
   try {
     offer = params.find((p) => p.startsWith("O={") && p.endsWith("}"));
     offer = offer.slice("O=".length);
-    offer = decodeURI(offer);
     offer = JSON.parse(offer);
   } catch {
     offer = null;
@@ -104,9 +111,8 @@ function getOfferAndAnswer() {
   let answer;
   try {
     answer = params.find((p) => p.startsWith("A={") && p.endsWith("}"));
-    answer = offer.slice("A=".length);
-    answer = decodeURI(answer);
-    answer = JSON.parse(offer);
+    answer = answer.slice("A=".length);
+    answer = JSON.parse(answer);
   } catch {
     answer = null;
   }
