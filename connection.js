@@ -55,7 +55,15 @@ async function createOffer() {
   offer = await connection.createOffer();
   await connection.setLocalDescription(offer);
 
-  // TODO: create link
+  // Create link
+  const href = window.location.href;
+  const base = href.includes("?") ? href.slice(0, href.indexOf("?")) : href;
+  const query = "?O=" + encodeURI(JSON.stringify(offer));
+  const link = base + query;
+
+  message.textContent = `Share link with peer! ${link}`;
+  navigator.clipboard.writeText(link);
+  button.disabled = true;
 }
 
 async function applyOffer(offer) {
