@@ -4,13 +4,18 @@ const RTC_CONNECTION_SETTINGS = {
 };
 
 // UI elements
+const div = document.getElementById("connection-applet");
 const button = document.getElementById("connection-button");
 const message = document.getElementById("connection-message");
+const input = document.getElementById("connection-input");
+const output = document.getElementById("connection-output");
+const inputMsg = document.getElementById("connection-input-message");
+const confirmButton = document.getElementById("connection-confirm-button");
 
 // Connect and set up
 let channel = null;
 const connection = new RTCPeerConnection(RTC_CONNECTION_SETTINGS);
-let [offer, answer] = getOfferAndAnswer();
+const offerFromQuery = getOfferFromQuery();
 
 connection.ondatachannel = (event) => {
   console.log("ondatachannel");
@@ -18,32 +23,26 @@ connection.ondatachannel = (event) => {
   channel.onmessage = (event) => alert(event.data);
 };
 
-connection.onconnectionstatechange = (event) => {
+connection.onconnectionstatechange = () => {
   console.log(`connectionstatechange: ${connection.connectionState}`);
 };
 
-connection.oniceconnectionstatechange = (event) => {
+connection.oniceconnectionstatechange = () => {
   console.log(`iceconnectionstatechange: ${connection.iceConnectionState}`);
 };
 
 (async () => {
-  if (offer) {
-    if (answer) {
-      // This is the offering party receiving the answer
-      await applyOffer(offer);
-      await acceptAnswer(answer);
+  if (offerFromQuery) {
+    // This is the answering party receiving an offer
+    message.textContent = "Loading invitation...";
+    await connection.setRemoteDescription(offerFromQuery);
 
-      // TODO: show feedback
-    } else {
-      // This is the answering party receiving an offer
-      await acceptRemoteOffer(offer);
-
-      message.textContent = "Click button to accept connection!";
-      button.textContent = "Accept connection";
-      button.disabled = false;
-      button.onclick = createAnswer;
-    }
+    message.textContent = "Click button to accept invitation!";
+    button.textContent = "Accept invitation";
+    button.disabled = false;
+    button.onclick = createAnswer;
   } else {
+    // Page loaded without an offer
     message.textContent = "Click button to start connection process";
     button.disabled = false;
     button.onclick = createOffer;
@@ -52,51 +51,70 @@ connection.oniceconnectionstatechange = (event) => {
 
 // Functions
 async function createOffer() {
-  channel = connection.createDataChannel("data");
-  channel.onmessage = (event) => alert(event.data);
-
-  offer = await connection.createOffer();
-  await connection.setLocalDescription(offer);
-
-  // Feedback
-  const href = window.location.href;
-  const base = href.includes("?") ? href.slice(0, href.indexOf("?")) : href;
-  const query = "?O=" + encodeURI(JSON.stringify(offer));
-  const link = base + query;
-
-  message.textContent = `Share link with peer! ${link}`;
-  navigator.clipboard.writeText(link);
   button.disabled = true;
-}
 
-async function applyOffer(offer) {
   channel = connection.createDataChannel("data");
   channel.onmessage = (event) => alert(event.data);
 
-  const newOffer = await connection.createOffer();
-  await connection.setLocalDescription(offer);
-}
+  connection.onicecandidate = (event) => {
+    if (!event.candidate) {
+      // Feedback
+      // TODO: extract method
+      const href = window.location.href;
+      const base = href.includes("?") ? href.slice(0, href.indexOf("?")) : href;
+      const query =
+        "?O=" + encodeURI(JSON.stringify(connection.localDescription));
+      const link = base + query;
 
-async function acceptRemoteOffer(offer) {
-  await connection.setRemoteDescription(offer);
+      // TODO: decouple UI?
+      message.textContent = "Share link to invite! (copied to clipboard)";
+      navigator.clipboard.writeText(link); // TODO: manage possible errors
+      output.value = link;
+      output.hidden = false;
+
+      inputMsg.textContent = "Paste peer reply below to initiate connection";
+      input.value = "";
+      input.hidden = false;
+      input.oninput = () => {
+        confirmButton.hidden = false;
+      };
+      confirmButton.onclick = acceptAnswer;
+    }
+  };
+
+  const offer = await connection.createOffer();
+  await connection.setLocalDescription(offer);
 }
 
 async function createAnswer() {
-  answer = await connection.createAnswer();
-  await connection.setLocalDescription(answer);
-
-  // Feedback
-  const link = window.location.href + "&A=" + encodeURI(JSON.stringify(answer));
-  message.textContent = `Share link back! ${link}`;
-  navigator.clipboard.writeText(link);
   button.disabled = true;
+
+  connection.onicecandidate = (event) => {
+    if (!event.candidate) {
+      const answerJson = JSON.stringify(connection.localDescription);
+
+      // Feedback
+      navigator.clipboard.writeText(answerJson); // TODO: manage possible errors
+
+      // TODO: decouple UI?
+      output.value = answerJson;
+      output.hidden = false;
+      message.textContent = "Share code to connect (copied to clipboard)";
+    }
+  };
+
+  const answer = await connection.createAnswer();
+  await connection.setLocalDescription(answer);
 }
 
-async function acceptAnswer(answer) {
-  await connection.setRemoteDescription(answer);
+async function acceptAnswer() {
+  confirmButton.disabled = true;
+
+  const answer = JSON.parse(input.value);
+  connection.setRemoteDescription(answer);
 }
 
-function getOfferAndAnswer() {
+function getOfferFromQuery() {
   const params = decodeURI(window.location.search).slice(1).split("&");
 
   let offer;
@@ -108,14 +126,5 @@ function getOfferAndAnswer() {
     offer = null;
   }
 
-  let answer;
-  try {
-    answer = params.find((p) => p.startsWith("A={") && p.endsWith("}"));
-    answer = answer.slice("A=".length);
-    answer = JSON.parse(answer);
-  } catch {
-    answer = null;
-  }
-
-  return [offer, answer];
+  return offer;
 }
