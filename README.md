@@ -24,7 +24,9 @@ Project made as an excercise to create a multiplayer game.
 
 # Roadmap
 
-- [ ] Implement WebSocket connection functionality and dialogs:
+- [x] Implement RTCPeerConnection functionality
+- [x] Implement connection dialogs
 - [ ] Implement interactive board
 - [ ] Implement game logic
 - [ ] Implement game sync
+- [ ] Improve connection dialogs
